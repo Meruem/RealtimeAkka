@@ -1,0 +1,29 @@
+akka {
+    actor {
+        provider = cluster
+        deployment {
+            /pricesub/broadcaster {
+                router = broadcast-group # routing strategy
+                routees.paths = ["/user/pricesub"] # path of routee on each node
+                
+                cluster {
+                    enabled = on
+                    allow-local-routees = on
+                    use-role = priceSubscriber
+                }
+            }
+        }
+    }
+    
+    remote {
+        dot-netty.tcp {
+            port = 8081
+            hostname = localhost
+        }
+    }
+
+    cluster {
+        seed-nodes = ["akka.tcp://realtime@localhost:8081"]
+        roles = ["priceSubscriber"]
+    }
+}

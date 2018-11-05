@@ -2,6 +2,7 @@ source https://api.nuget.org/v3/index.json
 nuget FSharp.Core
 nuget akka
 nuget akka.FSharp
+nuget akka.cluster
 nuget akkling
 
 // [ FAKE GROUP ]

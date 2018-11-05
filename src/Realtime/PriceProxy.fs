@@ -2,6 +2,7 @@ module PriceProxy
 
 open System
 open System.Timers
+open System.Collections.Generic
 
 type PriceRecord = {
     Ticker : string
@@ -16,8 +17,8 @@ type PriceConfig = {
 }
 
 type PriceProxy = {
-    TickerSubs : Map<string, (PriceRecord -> Unit) list>
-    AllSubs : (PriceRecord -> Unit) list
+    TickerSubs : Dictionary<string, (PriceRecord -> Unit) list>
+    AllSubs : List<(PriceRecord -> Unit)>
     PriceConfigs : Map<string, PriceConfig>
     NextTicks : Map<string, DateTime>
     Timer : Timer
@@ -25,11 +26,17 @@ type PriceProxy = {
 
 let rnd = new Random()
 
+let getValueOrDefault key def (dict:Dictionary<_,_>) = if dict.ContainsKey key then dict.[key] else def
+
 let subscribe ticker handler proxy = 
-    { proxy with TickerSubs = proxy.TickerSubs.Add (ticker, handler :: proxy.TickerSubs.[ticker])}
+    proxy.TickerSubs.Add (ticker, handler :: (proxy.TickerSubs |> getValueOrDefault ticker []))
+    proxy
+
+let subscribeMany tickers handler proxy = tickers |> List.fold (fun p ticker -> subscribe ticker handler p) proxy
 
 let subscribeAll handler proxy = 
-    { proxy with AllSubs = handler :: proxy.AllSubs}
+    proxy.AllSubs.Add handler
+    proxy
 
 let scheduleTick ticker config proxy = 
     let nextTick = rnd.NextDouble() * (config.MaxInterval - config.MinInterval) + config.MinInterval 
@@ -52,14 +59,15 @@ let start proxy =
         |> Map.filter (fun _ time -> time <= DateTime.Now) 
         |> Map.iter (fun ticker _ -> 
             let invokeHandler handler = handler (createPrice ticker proxy'.PriceConfigs.[ticker])
-            proxy'.AllSubs |> List.iter invokeHandler
+            proxy'.AllSubs |> Seq.iter invokeHandler
             if proxy'.TickerSubs.ContainsKey ticker then proxy'.TickerSubs.[ticker] |> List.iter invokeHandler))
         
     proxy'.Timer.Start()
+    proxy'
 
 let newProxy () = {
-    TickerSubs = Map.empty
-    AllSubs = []
+    TickerSubs = new Dictionary<_,_>()
+    AllSubs = new List<_>()
     PriceConfigs = Map.empty
     NextTicks = Map.empty
     Timer = new Timer(1000.0) }

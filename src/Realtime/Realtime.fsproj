@@ -8,6 +8,7 @@
     <Compile Include="PriceProxy.fs" />
     <Compile Include="Realtime.fs" />
     <None Include="App.config" />
+    <None Include="realtime.hocon" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>

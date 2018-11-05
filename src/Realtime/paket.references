@@ -1,4 +1,5 @@
 FSharp.Core
 akka
 akka.FSharp
+akka.cluster
 akkling
