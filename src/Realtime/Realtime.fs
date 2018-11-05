@@ -2,18 +2,11 @@ module Realtime
 
 open System
 open PriceProxy
-
-
 open Akkling
 open Akka.Actor
 open Akka.Routing
-open Akka.Routing
 
 type Ticker = string
-
-type Subscription = {
-    Ticker : Ticker
-}
 
 type SubscriberMsg =
     | RequestSubscribe of Ticker list
@@ -43,19 +36,13 @@ with
 
 let priceSubscriberReady (state:PriceSubscriberState) (config:Akka.Configuration.Config) (context: Actor<SubscriberMsg>) =
 
-    let bc = 
-        if (context.UntypedContext.Child "broadcaster").Equals(ActorRefs.Nobody) then
-            printfn "broadcast create"
-            spawn context "broadcaster" {(props Behaviors.ignore) with Router = Some (upcast new BroadcastGroup(config)) }
-        else 
-            printfn "broadcast found in child"
-            typed <| context.UntypedContext.Child "broadcaster"    
-
-    let state' = {state with Broadcaster = Some bc}    
+    let broadcast = spawn context "broadcaster" {(props Behaviors.ignore) with Router = Some (upcast new BroadcastGroup(config)) }
+    let state' = {state with Broadcaster = Some broadcast}    
 
     let rec ready state = actor {
         let! msg = context.Receive ()       
         match msg with
+        
         | RequestSubscribe tickers ->
             printfn "Request subscribe: %s" (String.Join (", ", tickers))
             let outstanding = state.Broadcaster.Value.Underlying.Ask<Routees>(new GetRoutees()).Result.Members |> Seq.length
@@ -92,17 +79,19 @@ let priceSubscriberReady (state:PriceSubscriberState) (config:Akka.Configuration
             context.Stash () 
 
         | RequestActiveSubscriptionList ->
-            printfn "Request active subscription list"
+            printfn "Request received for active subscription list"
             context.Sender() <! ActiveSubscriptionsReceived state.ActiveSubscriptions
 
         | ActiveSubscriptionsReceived activeTickers -> 
             printfn "Received active subs from another aktor: %s" (String.Join(", ", activeTickers))
 
             let tickers' = state.TickersPendingToAdd |> List.filter (fun t -> not (activeTickers |> List.contains t))
+            
             if state.OutstandingRequests = 1 then
                 if tickers' |> List.length > 0 then
                     context.Self <! AddSubscriptions tickers'
                 return! ready {state with OutstandingRequests = 0; TickersPendingToAdd = []}
+            
             else return! waitingForSubscriptionList 
                     {state with 
                         OutstandingRequests = (state.OutstandingRequests - 1)
@@ -116,9 +105,6 @@ let priceSubscriberReady (state:PriceSubscriberState) (config:Akka.Configuration
         return! waitingForSubscriptionList state }
 
     ready state' 
-
-
-
 
 
 [<EntryPoint>]
@@ -150,8 +136,6 @@ let main argv =
 
     let scheduler = spawn system "scheduler" {(props Behaviors.ignore) with Router = Some (upcast new RoundRobinGroup(config)) }
 
-    //subscriber <! RequestSubscribe ["ticker1"]
-
     let mutable input = Console.ReadLine () 
 
     while input <> "" do
@@ -159,7 +143,4 @@ let main argv =
         input <- Console.ReadLine ()
     proxy.Timer.Dispose()    
     CoordinatedShutdown.Get(system).Run().Wait() 
-    0 // return an integer exit code
-
-
-
+    0 
